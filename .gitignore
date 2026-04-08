@@ -33,3 +33,6 @@ _interno/herramientas/macos/ffmpeg
 
 # Binario nativo opcional de macOS
 _interno/runtime/macos/iniciar_flujo
+
+# Runtime local opcional de Windows
+_interno/runtime/windows/iniciar_flujo.exe

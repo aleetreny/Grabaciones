@@ -1,98 +1,94 @@
 # Procesador de llamadas
 
-Esta carpeta esta preparada para que el uso diario sea muy simple.
+Esta carpeta esta pensada para que el uso diario sea solo de doble clic.
 
 ## Uso normal
 
-1. Copiar los videos o audios nuevos en `01_Videos`
-2. Hacer doble clic en el boton de su sistema:
-   - `INICIAR PROCESO - Windows`
-   - `INICIAR PROCESO - macOS`
-3. Esperar a que termine
-4. Abrir el archivo final en `03_Texto_para_Copilot`
-5. Subir ese `.txt` a Copilot
+1. Copia los videos o audios nuevos en `01_Videos`.
+2. Haz doble clic en el boton de tu sistema:
+   - `INICIAR PROCESO - Windows.vbs`
+   - `INICIAR PROCESO - macOS.command`
+3. Espera a que termine el proceso.
+4. Abre el archivo final que aparece en `03_Texto_para_Copilot`.
+5. Sube ese `.txt` a Copilot.
 
 ## Carpetas importantes
 
-- `01_Videos`: entrada de archivos nuevos
-- `02_Transcripciones_por_llamada`: historico de transcripciones individuales
-- `03_Texto_para_Copilot`: salida final lista para Copilot
-- `04_Videos_ya_procesados`: historico de videos ya usados
+- `01_Videos`: entrada de archivos nuevos.
+- `02_Transcripciones_por_llamada`: historico de transcripciones por llamada.
+- `03_Texto_para_Copilot`: salida final lista para Copilot.
+- `04_Videos_ya_procesados`: historico de videos ya usados.
 
-## Qué subir a GitHub
+## Windows totalmente automatico
 
-Este repo ya esta preparado para no subir basura local.
+En Windows, el boton prepara el equipo automaticamente la primera vez si hace falta.
 
-Se ignoran automaticamente:
+Al hacer doble clic en `INICIAR PROCESO - Windows.vbs`, el sistema intentara:
 
-- videos y audios de prueba
-- transcripciones generadas
-- archivos finales para Copilot
-- videos ya procesados
-- logs
-- entornos virtuales
-- el `ffmpeg.exe` grande de Windows
+- localizar o instalar Python 3;
+- localizar o instalar FFmpeg;
+- crear el entorno interno del proyecto;
+- instalar Whisper y las dependencias necesarias;
+- lanzar el flujo normal con su ventana de progreso.
+
+En la gran mayoria de equipos Windows 10 y 11 esto deberia bastar. Si un equipo no trae `winget`, el propio proceso avisara para instalar `App Installer` una vez y volver a pulsar el boton.
 
 ## macOS totalmente automatico
 
-En Mac ya no hace falta preparar nada a mano.
+En macOS, el boton tambien prepara el equipo automaticamente la primera vez.
 
-La primera vez que esa persona haga doble clic en `INICIAR PROCESO - macOS.command`, el propio boton intentara:
+Al hacer doble clic en `INICIAR PROCESO - macOS.command`, el sistema intentara:
 
-- instalar las herramientas base de Apple si faltan
-- instalar Homebrew si falta
-- instalar Python 3 si falta
-- instalar FFmpeg si falta
-- crear el entorno interno del proyecto
-- instalar Whisper y el resto de dependencias
-- lanzar el flujo
+- instalar las herramientas base de Apple si faltan;
+- instalar Homebrew si falta;
+- instalar Python 3 si falta;
+- instalar FFmpeg si falta;
+- crear el entorno interno del proyecto;
+- instalar Whisper y las dependencias necesarias;
+- lanzar el flujo normal.
 
-## Lo normal en el primer arranque de Mac
+## Lo normal en el primer arranque
 
-En un Mac completamente limpio, el primer arranque puede pedir alguna accion del sistema:
+En un equipo completamente limpio, la primera ejecucion puede tardar bastante mas que las siguientes.
 
-- confirmacion de apertura del `.command`
-- instalacion de las herramientas base de Apple
-- contraseña del Mac para Homebrew
+Es normal que el sistema pida alguna confirmacion:
 
-Eso no lo podemos saltar por completo porque lo controla Apple, pero la idea sigue siendo la misma:
+- en Windows, permisos de instalacion o avisos de `winget`;
+- en macOS, apertura del `.command`, herramientas de Apple o contrasena del equipo.
 
-1. la persona pulsa el boton
-2. acepta lo que le pida macOS si sale algun aviso
-3. el proyecto se termina de preparar solo
-4. a partir de ahi, los siguientes usos ya son directos
+Eso no se puede evitar del todo porque depende del sistema operativo, pero la idea sigue siendo la misma:
 
-## Primer arranque en Mac: tiempos
+1. la persona hace doble clic en el boton;
+2. acepta los avisos del sistema si aparecen;
+3. el proyecto se prepara solo;
+4. a partir de ahi, las siguientes ejecuciones son mucho mas directas.
 
-- Si ese Mac nunca ha usado Whisper, la primera ejecucion puede tardar bastante mas
-- En ese primer uso puede descargar el modelo `small`
-- La instalacion inicial de Homebrew, Python y FFmpeg tambien puede tardar varios minutos
-- Despues las siguientes ejecuciones ya seran mucho mas directas
+## Si algo falla
 
-## Si macOS bloquea el boton
+Revisa estos archivos:
 
-La primera vez puede que macOS no deje abrirlo por seguridad. Si pasa:
+- `_interno/logs/ultima_ejecucion.txt`
+- `_interno/logs/instalacion_windows.log`
+- `_interno/logs/instalacion_macos.log`
 
-1. Haz clic derecho sobre `INICIAR PROCESO - macOS.command`
-2. Pulsa `Abrir`
-3. Confirma la apertura
+## Que subir a GitHub
 
-## Recomendacion para probar en tu otro Mac
+El repo ya esta preparado para no subir basura local.
 
-La prueba buena es esta:
+Se ignoran automaticamente:
 
-1. clonar el repo en el Mac
-2. meter un video en `01_Videos`
-3. hacer doble clic en `INICIAR PROCESO - macOS.command`
-4. dejar que el propio boton prepare ese Mac
-5. comprobar que aparece el texto final en `03_Texto_para_Copilot`
+- videos y audios de trabajo;
+- transcripciones generadas;
+- archivos finales para Copilot;
+- videos ya procesados;
+- logs;
+- entornos virtuales;
+- binarios locales grandes como `ffmpeg.exe`.
 
-## Nota importante para Windows
+## Prueba recomendada en otro equipo
 
-El `ffmpeg.exe` de Windows no se sube al repo porque GitHub lo rechazara por tamaño.
-
-En tu equipo actual sigue funcionando porque ya lo tienes localmente en:
-
-- `_interno/herramientas/windows/ffmpeg.exe`
-
-Si algun dia quieres compartir tambien la version Windows lista para usar desde GitHub, lo mejor es hacerlo en un `Release` o con Git LFS, no en el commit normal.
+1. clona el repo;
+2. mete un video en `01_Videos`;
+3. haz doble clic en el boton del sistema;
+4. deja que termine la preparacion inicial si es la primera vez;
+5. comprueba que aparece el `.txt` final en `03_Texto_para_Copilot`.
