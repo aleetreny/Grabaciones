@@ -1,94 +1,45 @@
 # Procesador de llamadas
 
-Esta carpeta esta pensada para que el uso diario sea solo de doble clic.
-
-## Uso normal
+## Como usarlo
 
 1. Copia los videos o audios nuevos en `01_Videos`.
 2. Haz doble clic en el boton de tu sistema:
-   - `INICIAR PROCESO - Windows.vbs`
-   - `INICIAR PROCESO - macOS.command`
-3. Espera a que termine el proceso.
-4. Abre el archivo final que aparece en `03_Texto_para_Copilot`.
-5. Sube ese `.txt` a Copilot.
+   - Windows: `INICIAR PROCESO - Windows.vbs`
+   - Mac: `INICIAR PROCESO - macOS.command`
+3. Si el equipo muestra algun aviso, aceptalo y espera.
+4. Cuando termine, abre el archivo `.txt` que aparece en `03_Texto_para_Copilot`.
+5. Sube ese archivo a Copilot.
 
-## Carpetas importantes
+## Importante
 
-- `01_Videos`: entrada de archivos nuevos.
-- `02_Transcripciones_por_llamada`: historico de transcripciones por llamada.
-- `03_Texto_para_Copilot`: salida final lista para Copilot.
-- `04_Videos_ya_procesados`: historico de videos ya usados.
+- La primera vez puede tardar bastante mas que las siguientes.
+- No hace falta instalar nada a mano: el proceso intenta prepararlo todo solo.
+- Cuando acaba, los videos procesados se mueven a `04_Videos_ya_procesados`.
 
-## Windows totalmente automatico
+## Carpetas que vas a usar
 
-En Windows, el boton prepara el equipo automaticamente la primera vez si hace falta.
+- `01_Videos`: aqui se ponen los videos o audios nuevos.
+- `03_Texto_para_Copilot`: aqui aparece el archivo final que tienes que subir.
 
-Al hacer doble clic en `INICIAR PROCESO - Windows.vbs`, el sistema intentara:
+## Si quieres repetir el proceso
 
-- localizar o instalar Python 3;
-- localizar o instalar FFmpeg;
-- crear el entorno interno del proyecto;
-- instalar Whisper y las dependencias necesarias;
-- lanzar el flujo normal con su ventana de progreso.
+1. Mete nuevos videos o audios en `01_Videos`.
+2. Vuelve a hacer doble clic en el boton de tu sistema.
 
-En la gran mayoria de equipos Windows 10 y 11 esto deberia bastar. Si un equipo no trae `winget`, el propio proceso avisara para instalar `App Installer` una vez y volver a pulsar el boton.
+## Preguntas frecuentes
 
-## macOS totalmente automatico
+### Quiero borrar transcripciones antiguas
 
-En macOS, el boton tambien prepara el equipo automaticamente la primera vez.
+Puedes borrar sin problema las carpetas con fecha dentro de `02_Transcripciones_por_llamada` y los archivos `.txt` de `03_Texto_para_Copilot`.
 
-Al hacer doble clic en `INICIAR PROCESO - macOS.command`, el sistema intentara:
+### Quiero volver a procesar un video ya usado
 
-- instalar las herramientas base de Apple si faltan;
-- instalar Homebrew si falta;
-- instalar Python 3 si falta;
-- instalar FFmpeg si falta;
-- crear el entorno interno del proyecto;
-- instalar Whisper y las dependencias necesarias;
-- lanzar el flujo normal.
+Mueve ese video desde `04_Videos_ya_procesados` de vuelta a `01_Videos` y vuelve a pulsar el boton.
 
-## Lo normal en el primer arranque
+### Quiero empezar de cero
 
-En un equipo completamente limpio, la primera ejecucion puede tardar bastante mas que las siguientes.
+Vacía el contenido de `02_Transcripciones_por_llamada`, `03_Texto_para_Copilot` y `04_Videos_ya_procesados`. Despues deja en `01_Videos` solo los archivos que quieras procesar.
 
-Es normal que el sistema pida alguna confirmacion:
+### La primera vez tarda mucho
 
-- en Windows, permisos de instalacion o avisos de `winget`;
-- en macOS, apertura del `.command`, herramientas de Apple o contrasena del equipo.
-
-Eso no se puede evitar del todo porque depende del sistema operativo, pero la idea sigue siendo la misma:
-
-1. la persona hace doble clic en el boton;
-2. acepta los avisos del sistema si aparecen;
-3. el proyecto se prepara solo;
-4. a partir de ahi, las siguientes ejecuciones son mucho mas directas.
-
-## Si algo falla
-
-Revisa estos archivos:
-
-- `_interno/logs/ultima_ejecucion.txt`
-- `_interno/logs/instalacion_windows.log`
-- `_interno/logs/instalacion_macos.log`
-
-## Que subir a GitHub
-
-El repo ya esta preparado para no subir basura local.
-
-Se ignoran automaticamente:
-
-- videos y audios de trabajo;
-- transcripciones generadas;
-- archivos finales para Copilot;
-- videos ya procesados;
-- logs;
-- entornos virtuales;
-- binarios locales grandes como `ffmpeg.exe`.
-
-## Prueba recomendada en otro equipo
-
-1. clona el repo;
-2. mete un video en `01_Videos`;
-3. haz doble clic en el boton del sistema;
-4. deja que termine la preparacion inicial si es la primera vez;
-5. comprueba que aparece el `.txt` final en `03_Texto_para_Copilot`.
+Es normal. La primera ejecucion puede tardar bastante mas porque el equipo se prepara solo.
