@@ -9,8 +9,6 @@ import threading
 import traceback
 from datetime import datetime
 from pathlib import Path
-from tkinter import Tk, messagebox, ttk
-import tkinter as tk
 
 from pipeline import (
     PipelineError,
@@ -21,6 +19,18 @@ from pipeline import (
 )
 
 TITLE = "Procesar llamadas"
+
+try:
+    import tkinter as tk
+    from tkinter import Tk, messagebox, ttk
+
+    TK_AVAILABLE = True
+except Exception:  # noqa: BLE001
+    tk = None  # type: ignore[assignment]
+    Tk = None  # type: ignore[assignment]
+    messagebox = None  # type: ignore[assignment]
+    ttk = None  # type: ignore[assignment]
+    TK_AVAILABLE = False
 
 
 def repository_root() -> Path:
@@ -420,6 +430,8 @@ class ProcessMonitorApp:
 
 def main() -> int:
     if silent_mode():
+        return run_headless()
+    if not TK_AVAILABLE:
         return run_headless()
     app = ProcessMonitorApp()
     return app.run()

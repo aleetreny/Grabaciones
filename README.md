@@ -33,40 +33,41 @@ Se ignoran automaticamente:
 - entornos virtuales
 - el `ffmpeg.exe` grande de Windows
 
-## Cómo dejarlo listo en un Mac
+## macOS totalmente automatico
 
-Haz esto en tu otro ordenador Mac dentro de la carpeta del proyecto:
+En Mac ya no hace falta preparar nada a mano.
 
-1. Instala Homebrew si no lo tienes
-2. Instala Python y FFmpeg:
+La primera vez que esa persona haga doble clic en `INICIAR PROCESO - macOS.command`, el propio boton intentara:
 
-```bash
-brew install python ffmpeg
-```
+- instalar las herramientas base de Apple si faltan
+- instalar Homebrew si falta
+- instalar Python 3 si falta
+- instalar FFmpeg si falta
+- crear el entorno interno del proyecto
+- instalar Whisper y el resto de dependencias
+- lanzar el flujo
 
-3. Crea el entorno local del Mac:
+## Lo normal en el primer arranque de Mac
 
-```bash
-python3 -m venv _interno/venv-macos
-source _interno/venv-macos/bin/activate
-pip install -r _interno/requirements.txt
-```
+En un Mac completamente limpio, el primer arranque puede pedir alguna accion del sistema:
 
-4. Da permiso de ejecucion al boton de Mac:
+- confirmacion de apertura del `.command`
+- instalacion de las herramientas base de Apple
+- contraseña del Mac para Homebrew
 
-```bash
-chmod +x "INICIAR PROCESO - macOS.command"
-```
+Eso no lo podemos saltar por completo porque lo controla Apple, pero la idea sigue siendo la misma:
 
-5. Prueba el flujo:
-   - mete un video en `01_Videos`
-   - haz doble clic en `INICIAR PROCESO - macOS.command`
+1. la persona pulsa el boton
+2. acepta lo que le pida macOS si sale algun aviso
+3. el proyecto se termina de preparar solo
+4. a partir de ahi, los siguientes usos ya son directos
 
-## Primer arranque en Mac
+## Primer arranque en Mac: tiempos
 
 - Si ese Mac nunca ha usado Whisper, la primera ejecucion puede tardar bastante mas
 - En ese primer uso puede descargar el modelo `small`
-- Lo normal es que despues las siguientes ejecuciones ya sean mas directas
+- La instalacion inicial de Homebrew, Python y FFmpeg tambien puede tardar varios minutos
+- Despues las siguientes ejecuciones ya seran mucho mas directas
 
 ## Si macOS bloquea el boton
 
@@ -75,6 +76,16 @@ La primera vez puede que macOS no deje abrirlo por seguridad. Si pasa:
 1. Haz clic derecho sobre `INICIAR PROCESO - macOS.command`
 2. Pulsa `Abrir`
 3. Confirma la apertura
+
+## Recomendacion para probar en tu otro Mac
+
+La prueba buena es esta:
+
+1. clonar el repo en el Mac
+2. meter un video en `01_Videos`
+3. hacer doble clic en `INICIAR PROCESO - macOS.command`
+4. dejar que el propio boton prepare ese Mac
+5. comprobar que aparece el texto final en `03_Texto_para_Copilot`
 
 ## Nota importante para Windows
 
