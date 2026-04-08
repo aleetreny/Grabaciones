@@ -1,0 +1,35 @@
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Datos locales de trabajo
+01_Videos/*
+!01_Videos/.gitkeep
+02_Transcripciones_por_llamada/*
+!02_Transcripciones_por_llamada/.gitkeep
+03_Texto_para_Copilot/*
+!03_Texto_para_Copilot/.gitkeep
+04_Videos_ya_procesados/*
+!04_Videos_ya_procesados/.gitkeep
+
+# Entornos y temporales internos
+_interno/venv/
+_interno/venv-macos/
+_interno/logs/*
+!_interno/logs/.gitkeep
+_interno/__pycache__/
+_interno/pruebas/__pycache__/
+_interno/_build/
+
+# Binarios locales que no deben ir al repo
+_interno/herramientas/windows/ffmpeg.exe
+_interno/herramientas/macos/ffmpeg
+
+# Binario nativo opcional de macOS
+_interno/runtime/macos/iniciar_flujo
