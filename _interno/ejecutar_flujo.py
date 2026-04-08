@@ -163,6 +163,7 @@ class ProcessMonitorApp:
 
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.root.after(80, self.present_window)
         self.root.after(150, self.poll_events)
         self.start()
 
@@ -261,6 +262,31 @@ class ProcessMonitorApp:
         self.log_box.insert("end", f"{message}\n")
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
+
+    def present_window(self) -> None:
+        try:
+            self.root.update_idletasks()
+
+            width = max(self.root.winfo_width(), 560)
+            height = max(self.root.winfo_height(), 340)
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            x = max((screen_width - width) // 2, 0)
+            y = max((screen_height - height) // 3, 0)
+
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
+            self.root.deiconify()
+            self.root.lift()
+            self.root.focus_force()
+            self.root.attributes("-topmost", True)
+            self.root.after(1200, lambda: self.root.attributes("-topmost", False))
+
+            if sys.platform.startswith("win"):
+                hwnd = self.root.winfo_id()
+                ctypes.windll.user32.ShowWindow(hwnd, 5)
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+        except Exception:  # noqa: BLE001
+            return
 
     def start(self) -> None:
         reset_log()
@@ -379,6 +405,7 @@ class ProcessMonitorApp:
 
     def handle_pipeline_error(self, error: PipelineError) -> None:
         self.running = False
+        self.present_window()
         self.status_var.set("Proceso detenido")
         self.detail_var.set(str(error))
         self.counter_var.set("No se ha procesado ningun archivo")
@@ -387,6 +414,7 @@ class ProcessMonitorApp:
 
     def handle_unexpected_error(self) -> None:
         self.running = False
+        self.present_window()
         self.status_var.set("Error inesperado")
         self.detail_var.set(f"Revisa el log en {log_file_path()}")
         self.counter_var.set("Proceso interrumpido")
@@ -398,6 +426,7 @@ class ProcessMonitorApp:
 
     def handle_done(self, summary: object) -> None:
         self.running = False
+        self.present_window()
         self.open_button.configure(state="normal")
 
         export_file = getattr(summary, "export_file", None)
