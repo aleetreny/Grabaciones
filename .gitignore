@@ -36,3 +36,6 @@ _interno/runtime/macos/iniciar_flujo
 
 # Runtime local opcional de Windows
 _interno/runtime/windows/iniciar_flujo.exe
+
+# Diagnosticos visibles generados en errores
+DIAGNOSTICO - ultimo error.txt

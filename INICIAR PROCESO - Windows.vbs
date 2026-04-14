@@ -1,43 +1,78 @@
 Option Explicit
 
-Dim shell, fso, rootPath, bootstrapScript, pythonwExe, pythonExe, ffmpegExe, scriptPath
-Dim bootstrapCommand, command, exitCode
+Dim shell, fso, rootPath, bootstrapScript, scriptPath, diagnosticPath
+Dim bootstrapCommand, exitCode
 Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 rootPath = fso.GetParentFolderName(WScript.ScriptFullName)
 bootstrapScript = rootPath & "\_interno\bootstrap_windows.ps1"
-pythonwExe = rootPath & "\_interno\venv\Scripts\pythonw.exe"
-pythonExe = rootPath & "\_interno\venv\Scripts\python.exe"
-ffmpegExe = rootPath & "\_interno\herramientas\windows\ffmpeg.exe"
 scriptPath = rootPath & "\_interno\ejecutar_flujo.py"
+diagnosticPath = rootPath & "\DIAGNOSTICO - ultimo error.txt"
 
 shell.CurrentDirectory = rootPath
 
-If fso.FileExists(scriptPath) And fso.FileExists(ffmpegExe) And (fso.FileExists(pythonwExe) Or fso.FileExists(pythonExe)) Then
-    If fso.FileExists(pythonwExe) Then
-        command = """" & pythonwExe & """ """ & scriptPath & """"
-    Else
-        command = """" & pythonExe & """ """ & scriptPath & """"
+Sub ClearDiagnostic()
+    On Error Resume Next
+    If fso.FileExists(diagnosticPath) Then
+        fso.DeleteFile diagnosticPath, True
     End If
-    shell.Run command, 0, False
+    On Error GoTo 0
+End Sub
+
+Sub WriteDiagnostic(summary, details)
+    Dim report
+    Set report = fso.CreateTextFile(diagnosticPath, True, True)
+    report.WriteLine "DIAGNOSTICO DEL ULTIMO ERROR"
+    report.WriteLine ""
+    report.WriteLine "Fecha: " & Now
+    report.WriteLine "Carpeta del proyecto: " & rootPath
+    report.WriteLine ""
+    report.WriteLine "RESUMEN"
+    report.WriteLine summary
+    report.WriteLine ""
+    report.WriteLine "DETALLE"
+    report.WriteLine details
+    report.Close
+End Sub
+
+Sub OpenDiagnostic()
+    If fso.FileExists(diagnosticPath) Then
+        shell.Run "notepad.exe """ & diagnosticPath & """", 1, False
+    End If
+End Sub
+
+Sub ShowFailure(summary, details)
+    WriteDiagnostic summary, details
+    OpenDiagnostic
+    MsgBox summary & vbCrLf & vbCrLf & "Se ha abierto este diagnostico:" & vbCrLf & diagnosticPath, vbExclamation, "Procesar llamadas"
+End Sub
+
+ClearDiagnostic
+
+If Not fso.FileExists(scriptPath) Then
+    ShowFailure "La carpeta del proyecto no esta completa o se esta ejecutando desde un zip.", _
+                "No se ha encontrado el archivo interno:" & vbCrLf & scriptPath & vbCrLf & vbCrLf & _
+                "Extrae la carpeta completa y vuelve a intentarlo."
 ElseIf fso.FileExists(bootstrapScript) Then
-    bootstrapCommand = "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File """ & bootstrapScript & """ -NoLaunch"
+    bootstrapCommand = "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File """ & bootstrapScript & """"
     exitCode = shell.Run(bootstrapCommand, 0, True)
 
-    If exitCode <> 0 Then
-        MsgBox "No se ha podido preparar Windows automaticamente." & vbCrLf & vbCrLf & _
-               "Revisa el log en:" & vbCrLf & rootPath & "\_interno\logs\instalacion_windows.log", vbExclamation, "Procesar llamadas"
-    ElseIf fso.FileExists(pythonwExe) Then
-        command = """" & pythonwExe & """ """ & scriptPath & """"
-        shell.Run command, 0, False
-    ElseIf fso.FileExists(pythonExe) Then
-        command = """" & pythonExe & """ """ & scriptPath & """"
-        shell.Run command, 0, False
-    Else
-        MsgBox "Windows se ha preparado, pero no se ha encontrado el lanzador interno." & vbCrLf & vbCrLf & _
-               "Revisa el log en:" & vbCrLf & rootPath & "\_interno\logs\instalacion_windows.log", vbExclamation, "Procesar llamadas"
+    If exitCode = 90 Then
+        ' Ya hay otra preparacion o ejecucion en marcha. El propio bootstrap ya ha avisado al usuario.
+    ElseIf exitCode <> 0 Then
+        If fso.FileExists(diagnosticPath) Then
+            OpenDiagnostic
+            MsgBox "No se ha podido preparar Windows automaticamente." & vbCrLf & vbCrLf & _
+                   "Se ha abierto este diagnostico:" & vbCrLf & diagnosticPath, vbExclamation, "Procesar llamadas"
+        Else
+            ShowFailure "No se ha podido preparar Windows automaticamente.", _
+                        "No se ha generado el diagnostico automatico." & vbCrLf & _
+                        "Revisa si el proyecto esta completo y vuelve a intentarlo."
+        End If
     End If
 Else
-    MsgBox "No se ha encontrado el preparador automatico de Windows.", vbExclamation, "Procesar llamadas"
+    ShowFailure "No se ha encontrado el preparador automatico de Windows.", _
+                "Falta este archivo:" & vbCrLf & bootstrapScript & vbCrLf & vbCrLf & _
+                "Comprueba que la carpeta del proyecto este completa."
 End If

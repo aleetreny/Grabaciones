@@ -161,6 +161,88 @@ def emit_progress(
         progress(event, payload)
 
 
+def describe_model_load_error(error: Exception) -> str:
+    message = str(error).strip()
+    lowered = message.lower()
+
+    if (
+        ("no module named" in lowered and "whisper" in lowered)
+        or ("modulenotfounderror" in lowered and "whisper" in lowered)
+    ):
+        return (
+            "Whisper no se ha instalado correctamente en este equipo todavia. "
+            "Vuelve a pulsar el boton para que Windows termine de preparar el entorno interno."
+        )
+
+    if any(
+        token in lowered
+        for token in (
+            "ssl",
+            "certificate",
+            "urlopen",
+            "download",
+            "http error",
+            "connection",
+            "proxy",
+            "407",
+            "timed out",
+            "name or service not known",
+            "getaddrinfo",
+            "nodename nor servname provided",
+        )
+    ):
+        return (
+            "No se ha podido descargar o cargar el modelo de Whisper en este equipo. "
+            "Comprueba que tenga internet y que la red no bloquee la descarga."
+        )
+
+    if "torch" in lowered or "dll" in lowered:
+        return (
+            "Whisper no se ha podido cargar correctamente en este equipo. "
+            "Puede faltar alguna dependencia del entorno interno."
+        )
+
+    if message:
+        return f"No se ha podido cargar Whisper. Detalle tecnico: {message}"
+    return "No se ha podido cargar Whisper en este equipo."
+
+
+def describe_transcription_error(media_file: Path, error: Exception) -> str:
+    message = str(error).strip()
+    lowered = message.lower()
+
+    if any(
+        token in lowered
+        for token in (
+            "ffmpeg",
+            "invalid data found",
+            "could not find codec parameters",
+            "moov atom not found",
+            "error opening input",
+        )
+    ):
+        return (
+            f"No se ha podido leer el archivo {media_file.name}. "
+            "Comprueba que el video o audio no este danado."
+        )
+
+    if any(token in lowered for token in ("permission", "denied", "winerror 5", "winerror 32")):
+        return (
+            f"No se ha podido acceder a {media_file.name}. "
+            "Comprueba que el archivo no este abierto en otro programa."
+        )
+
+    if any(token in lowered for token in ("cannot find the file", "no such file", "system cannot find")):
+        return (
+            f"No se ha encontrado el archivo {media_file.name} cuando se iba a transcribir. "
+            "Comprueba que siga estando dentro de 01_Videos."
+        )
+
+    if message:
+        return f"No se ha podido transcribir {media_file.name}. Detalle tecnico: {message}"
+    return f"No se ha podido transcribir {media_file.name}."
+
+
 class WhisperTranscriber:
     def __init__(
         self,
@@ -238,15 +320,22 @@ class WhisperTranscriber:
         if self._model is None:
             self.log("Cargando el modelo de Whisper. Esto puede tardar un poco la primera vez.")
             emit_progress(self.progress, "model_loading", model_name=self.model_name)
-            import whisper
-
-            self._model = whisper.load_model(self.model_name)
+            try:
+                import whisper
+                self._model = whisper.load_model(self.model_name)
+            except Exception as error:  # noqa: BLE001
+                raise PipelineError(describe_model_load_error(error)) from error
             emit_progress(self.progress, "model_ready", model_name=self.model_name)
         return self._model
 
     def transcribe(self, media_file: Path) -> str:
-        with self.gui_progress_patch():
-            result = self.model.transcribe(str(media_file), task="transcribe", verbose=False)
+        try:
+            with self.gui_progress_patch():
+                result = self.model.transcribe(str(media_file), task="transcribe", verbose=False)
+        except PipelineError:
+            raise
+        except Exception as error:  # noqa: BLE001
+            raise PipelineError(describe_transcription_error(media_file, error)) from error
         return str(result.get("text", ""))
 
 

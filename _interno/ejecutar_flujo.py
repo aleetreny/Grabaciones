@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import traceback
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -45,6 +46,16 @@ def log_file_path() -> Path:
     return log_folder / "ultima_ejecucion.txt"
 
 
+def diagnostic_file_path() -> Path:
+    return repository_root() / "DIAGNOSTICO - ultimo error.txt"
+
+
+def execution_lock_path() -> Path:
+    lock_folder = repository_root() / "_interno" / "logs"
+    lock_folder.mkdir(parents=True, exist_ok=True)
+    return lock_folder / "flujo_en_curso.lock"
+
+
 def write_log(message: str) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with log_file_path().open("a", encoding="utf-8") as handle:
@@ -53,6 +64,12 @@ def write_log(message: str) -> None:
 
 def reset_log() -> None:
     log_file_path().write_text("", encoding="utf-8")
+
+
+def clear_diagnostic_file() -> None:
+    report = diagnostic_file_path()
+    if report.exists():
+        report.unlink()
 
 
 def escape_applescript(value: str) -> str:
@@ -109,8 +126,117 @@ def show_error(message: str) -> None:
     print(message, file=sys.stderr)
 
 
+def summarize_unexpected_error(error: BaseException) -> str:
+    message = str(error).strip()
+    lowered = message.lower()
+
+    if any(token in lowered for token in ("ssl", "certificate", "urlopen", "download", "http error", "connection")):
+        return (
+            "No se ha podido descargar o cargar el modelo de Whisper en este equipo. "
+            "Comprueba la conexion a internet o si la red corporativa bloquea la descarga."
+        )
+
+    if "torch" in lowered or "dll" in lowered:
+        return (
+            "Whisper no se ha podido cargar correctamente en este equipo. "
+            "Puede faltar alguna dependencia del entorno interno."
+        )
+
+    if "permission" in lowered or "denied" in lowered:
+        return "Windows ha bloqueado algun archivo del proceso. Comprueba permisos y vuelve a intentarlo."
+
+    if message:
+        return f"Detalle tecnico: {error.__class__.__name__}: {message}"
+    return f"Detalle tecnico: {error.__class__.__name__}"
+
+
+def write_diagnostic_report(summary: str, details: str) -> Path:
+    report_path = diagnostic_file_path()
+    log_path = log_file_path()
+    log_contents = ""
+    if log_path.exists():
+        log_contents = log_path.read_text(encoding="utf-8")
+
+    report_text = "\n".join(
+        [
+            "DIAGNOSTICO DEL ULTIMO ERROR",
+            "",
+            f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Equipo: {os.environ.get('COMPUTERNAME', '')}",
+            f"Usuario: {os.environ.get('USERNAME', '')}",
+            f"Python: {sys.version}",
+            "",
+            "RESUMEN",
+            summary,
+            "",
+            "LOG DE LA EJECUCION",
+            log_contents.strip() or "(Sin contenido)",
+            "",
+            "DETALLE TECNICO",
+            details.strip() or "(Sin traceback)",
+            "",
+        ]
+    )
+    report_path.write_text(report_text, encoding="utf-8")
+    return report_path
+
+
+def open_path(target: Path) -> None:
+    target_text = str(target)
+    if sys.platform.startswith("win"):
+        os.startfile(target_text)  # type: ignore[attr-defined]
+        return
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", target_text])
+        return
+    subprocess.Popen(["xdg-open", target_text])
+
+
+@contextmanager
+def single_execution_lock():
+    lock_file = execution_lock_path().open("a+b")
+    acquired = False
+    try:
+        lock_file.seek(0)
+        lock_file.write(b" ")
+        lock_file.flush()
+        lock_file.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_file.seek(0)
+        lock_file.truncate()
+        lock_file.write(str(os.getpid()).encode("ascii", errors="ignore"))
+        lock_file.flush()
+        acquired = True
+        yield True
+    except OSError:
+        yield False
+    finally:
+        if acquired:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    lock_file.seek(0)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+        lock_file.close()
+
+
 def run_headless() -> int:
     reset_log()
+    clear_diagnostic_file()
     paths = project_paths(repository_root())
     paths.ensure_directories()
     write_log("Inicio de ejecucion.")
@@ -119,14 +245,30 @@ def run_headless() -> int:
         summary = run_pipeline(paths, log=write_log)
     except PipelineError as error:
         write_log(f"Proceso detenido: {error}")
-        show_info(str(error))
+        report = write_diagnostic_report(str(error), "")
+        if not silent_mode():
+            try:
+                open_path(report)
+            except Exception:  # noqa: BLE001
+                pass
+        show_error(
+            f"{error}\n\n"
+            f"Se ha guardado un diagnostico en:\n{report}"
+        )
         return 1
     except Exception:  # noqa: BLE001
         details = traceback.format_exc()
         write_log(details)
+        summary = summarize_unexpected_error(sys.exc_info()[1] or RuntimeError("Error desconocido"))
+        report = write_diagnostic_report(summary, details)
+        if not silent_mode():
+            try:
+                open_path(report)
+            except Exception:  # noqa: BLE001
+                pass
         show_error(
-            "Ha ocurrido un error inesperado.\n\n"
-            f"Revisa el log en:\n{log_file_path()}"
+            f"{summary}\n\n"
+            f"Se ha guardado un diagnostico en:\n{report}"
         )
         return 1
 
@@ -153,6 +295,7 @@ class ProcessMonitorApp:
         self.paths = project_paths(repository_root())
         self.paths.ensure_directories()
         self.export_file: Path | None = None
+        self.diagnostic_file: Path | None = None
 
         self.status_var = tk.StringVar(value="Preparando proceso...")
         self.detail_var = tk.StringVar(
@@ -290,6 +433,7 @@ class ProcessMonitorApp:
 
     def start(self) -> None:
         reset_log()
+        clear_diagnostic_file()
         write_log("Inicio de ejecucion.")
         self.running = True
         self.append_log("Inicio de ejecucion.")
@@ -308,7 +452,7 @@ class ProcessMonitorApp:
         except Exception as error:  # noqa: BLE001
             details = traceback.format_exc()
             write_log(details)
-            self.events.put(("unexpected_error", error))
+            self.events.put(("unexpected_error", {"error": error, "details": details}))
         else:
             self.events.put(("done", summary))
 
@@ -334,7 +478,7 @@ class ProcessMonitorApp:
             elif event_type == "pipeline_error":
                 self.handle_pipeline_error(payload)  # type: ignore[arg-type]
             elif event_type == "unexpected_error":
-                self.handle_unexpected_error()
+                self.handle_unexpected_error(payload)  # type: ignore[arg-type]
             elif event_type == "done":
                 self.handle_done(payload)
 
@@ -406,28 +550,48 @@ class ProcessMonitorApp:
     def handle_pipeline_error(self, error: PipelineError) -> None:
         self.running = False
         self.present_window()
+        self.diagnostic_file = write_diagnostic_report(str(error), "")
         self.status_var.set("Proceso detenido")
         self.detail_var.set(str(error))
         self.counter_var.set("No se ha procesado ningun archivo")
         self.append_log(f"Proceso detenido: {error}")
-        messagebox.showinfo(TITLE, str(error))
-
-    def handle_unexpected_error(self) -> None:
-        self.running = False
-        self.present_window()
-        self.status_var.set("Error inesperado")
-        self.detail_var.set(f"Revisa el log en {log_file_path()}")
-        self.counter_var.set("Proceso interrumpido")
+        self.open_button.configure(state="normal", text="Abrir diagnostico")
+        try:
+            open_path(self.diagnostic_file)
+        except Exception:  # noqa: BLE001
+            pass
         messagebox.showerror(
             TITLE,
-            "Ha ocurrido un error inesperado.\n\n"
-            f"Revisa el log en:\n{log_file_path()}",
+            f"{error}\n\n"
+            f"Se ha guardado un diagnostico en:\n{self.diagnostic_file}",
+        )
+
+    def handle_unexpected_error(self, payload: dict[str, object]) -> None:
+        self.running = False
+        self.present_window()
+        error = payload.get("error")
+        details = str(payload.get("details", ""))
+        summary = summarize_unexpected_error(error) if isinstance(error, BaseException) else "Ha ocurrido un error inesperado."
+        self.diagnostic_file = write_diagnostic_report(summary, details)
+        self.status_var.set("Error inesperado")
+        self.detail_var.set(summary)
+        self.counter_var.set("Proceso interrumpido")
+        self.append_log(summary)
+        self.open_button.configure(state="normal", text="Abrir diagnostico")
+        try:
+            open_path(self.diagnostic_file)
+        except Exception:  # noqa: BLE001
+            pass
+        messagebox.showerror(
+            TITLE,
+            f"{summary}\n\n"
+            f"Se ha guardado un diagnostico en:\n{self.diagnostic_file}",
         )
 
     def handle_done(self, summary: object) -> None:
         self.running = False
         self.present_window()
-        self.open_button.configure(state="normal")
+        self.open_button.configure(state="normal", text="Abrir resultado")
 
         export_file = getattr(summary, "export_file", None)
         if isinstance(export_file, Path):
@@ -443,6 +607,9 @@ class ProcessMonitorApp:
         )
 
     def open_result(self) -> None:
+        if self.diagnostic_file is not None and self.diagnostic_file.exists():
+            open_path(self.diagnostic_file)
+            return
         if self.export_file is not None:
             open_in_file_browser(self.export_file.parent)
 
@@ -458,12 +625,17 @@ class ProcessMonitorApp:
 
 
 def main() -> int:
-    if silent_mode():
-        return run_headless()
-    if not TK_AVAILABLE:
-        return run_headless()
-    app = ProcessMonitorApp()
-    return app.run()
+    with single_execution_lock() as acquired:
+        if not acquired:
+            show_info("Ya hay un proceso en marcha en esta carpeta. Espera a que termine o abre la ventana que ya esta en segundo plano.")
+            return 0
+
+        if silent_mode():
+            return run_headless()
+        if not TK_AVAILABLE:
+            return run_headless()
+        app = ProcessMonitorApp()
+        return app.run()
 
 
 if __name__ == "__main__":
