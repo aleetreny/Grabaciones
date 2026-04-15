@@ -1,203 +1,44 @@
-Contexto del Proyecto — Pipeline de Transcripción y Análisis de Llamadas
+Contexto del Proyecto - Transcriptor personal de audios para macOS
 
-1.  Objetivo del proyecto
+1. Objetivo
 
-Este repositorio implementa un pipeline end‑to‑end para:
+Este repositorio existe para transcribir audios y videos en local, de forma sencilla y personal:
 
-*   Transcribir múltiples llamadas (audio/vídeo) usando Whisper en local.
-*   Agregar todas las transcripciones de un día en un único archivo de texto.
-*   Analizar ese archivo agregado usando Microsoft Copilot con un agente generalista, sin acceso a fuentes externas.
+- Un solo boton en Mac.
+- Un archivo .txt por cada audio/video.
+- Guardado incremental para no perder trabajo si el proceso se interrumpe.
 
-El foco NO es analizar llamadas individuales, sino extraer insights agregados:
+2. Alcance actual
 
-*   motivos de llamada más frecuentes
-*   incidencias recurrentes
-*   patrones y tendencias
-*   señales de frustración del cliente
-*   recomendaciones operativas
+- Solo macOS.
+- Sin componentes de Windows.
+- Sin exportes para Copilot.
+- Sin consolidado diario unico.
 
-Este caso de uso es típico de contact center / atención al cliente (por ejemplo, 50 llamadas al día).
+3. Flujo de uso
 
-***
+1) Poner archivos en 01_Audios_entrada
+2) Ejecutar TRANSCRIBIR AUDIOS - macOS.command
+3) Ver progreso en ventana
+4) Recoger textos en 02_Transcripciones/YYYY-MM-DD
+5) Los originales pasan a 03_Audios_procesados/YYYY-MM-DD
 
-2.  Decisiones de diseño clave (ya cerradas)
+4. Decisiones tecnicas
 
-Arquitectura de análisis
+- Motor de transcripcion: Whisper local.
+- Modelo por defecto: turbo.
+- Idioma por defecto: es.
+- FFmpeg: preferencia por binario enlazado en _interno/herramientas/macos/ffmpeg y fallback al del sistema.
 
-*   NO se usa SharePoint, Teams ni OneDrive como knowledge source del agente.
-*   El usuario sube manualmente un archivo .txt agregado al chat de Copilot.
-*   El agente analiza solo el archivo adjunto en ese mensaje.
+5. Requisitos funcionales clave
 
-Tipo de agente Copilot
+- Guardar cada .txt justo al terminar cada archivo.
+- Mostrar progreso de lote y de archivo en tiempo real.
+- Poder relanzar el flujo sin reprocesar lo ya movido a procesados.
 
-*   Agente generalista, sin knowledge sources configurados.
-*   Opción “Only use specified sources” ACTIVADA.
-*   Sin búsqueda web, sin org chart, sin contexto externo.
+6. Archivos principales
 
-El agente actúa como un analista operativo de llamadas a partir de transcripciones agregadas.
-
-***
-
-3.  Flujo completo para el usuario final
-
-Copiar todos los audios/vídeos del día en la carpeta videos/
-
-Ejecutar un único binario:
-    *   Windows: run\_transcription.exe
-    *   macOS: run\_transcription
-
-El pipeline transcribe cada llamada y agrega todas en un archivo diario
-
-El usuario abre Copilot, selecciona el agente y sube el .txt diario
-
-El usuario pregunta por el conjunto de llamadas (top problemas, conteos, tendencias, etc.)
-
-El usuario final:
-
-*   NO instala Python
-*   NO instala FFmpeg
-*   NO configura nada
-
-***
-
-4.  Estructura del repositorio (conceptual)
-
-repo/
-
-*   videos/                     (input: audios/vídeos del día)
-*   transcriptions/
-    *   daily/                    (output: archivo agregado diario)
-    *   archive/                  (transcripciones individuales ya procesadas)
-*   tools/
-    *   ffmpeg/
-        *   windows/ffmpeg.exe
-        *   macos/ffmpeg
-*   main.py                     (entrypoint único del pipeline)
-*   transcribe\_whisper.py       (transcribe cada audio/vídeo)
-*   aggregate\_transcripts.py    (agrega transcripciones del día)
-*   bin/
-    *   windows/run\_transcription.exe
-    *   macos/run\_transcription
-*   README.txt
-
-***
-
-5.  Transcripción (Whisper)
-
-*   Se usa Whisper local (no API).
-*   Cada audio/vídeo genera un .txt individual.
-*   El idioma suele ser español (se puede forzar más adelante si se decide).
-*   FFmpeg NO depende del sistema, se incluye en tools/ffmpeg.
-
-Importante:  
-El código ajusta el PATH en runtime para que Whisper use el FFmpeg incluido, no el del sistema.
-
-***
-
-6.  Agregación diaria de llamadas
-
-Script: aggregate\_transcripts.py
-
-Función:
-
-*   Lee todos los .txt individuales
-*   Crea un archivo diario con estructura clara por llamada
-
-Formato lógico del archivo agregado:
-
-LLAMADA 001  
-Archivo original: call\_001.txt  
-Contenido de la transcripción
-
-LLAMADA 002  
-Archivo original: call\_002.txt  
-Contenido de la transcripción
-
-El archivo final se guarda como:
-transcriptions/daily/YYYY-MM-DD\_all\_calls.txt
-
-Los .txt individuales se mueven a archive/ para evitar re‑agregaciones.
-
-Este archivo agregado es el dataset que se analiza en Copilot.
-
-***
-
-7.  Empaquetado y distribución
-
-Decisión clave:  
-Los usuarios NO tienen Python, por lo que el pipeline se distribuye como binario.
-
-*   Se usa PyInstaller
-*   Un binario por sistema operativo:
-    *   Windows: .exe
-    *   macOS: binario nativo
-
-No existe binario cross‑platform único (esto es normal y esperado).
-
-***
-
-8.  Rol del agente Copilot
-
-El agente:
-
-*   Trabaja exclusivamente con el archivo .txt subido por el usuario
-*   Interpreta el contenido como conjunto de llamadas
-*   Prioriza:
-    *   frecuencia de incidencias
-    *   patrones
-    *   tendencias
-    *   impacto en cliente
-*   Responde con:
-    *   resumen ejecutivo
-    *   top problemas
-    *   ejemplos textuales
-    *   recomendaciones operativas
-
-El agente NO:
-
-*   busca información externa
-*   usa conocimiento general
-*   accede a repositorios o carpetas
-
-***
-
-9.  Estado actual del proyecto
-
-*   Pipeline conceptual definido
-*   Scripts de transcripción y agregación creados
-*   Diseño del agente Copilot definido
-*   Decisión de empaquetado Windows / macOS tomada
-
-El siguiente paso técnico es terminar el empaquetado multiplataforma con PyInstaller y validar FFmpeg embebido.
-
-***
-
-10. Qué NO hay que replantear
-
-*   Usar SharePoint / Teams como knowledge source
-*   Pedir Python o FFmpeg al usuario
-*   Analizar llamadas una a una en Copilot
-*   Agente con acceso a “todo el tenant”
-
-Estas decisiones están cerradas.
-
-***
-
-11. Qué sí puede venir después (fuera de scope inmediato)
-
-*   Forzar idioma en Whisper
-*   Añadir metadatos por llamada
-*   Generar CSV resumen además del .txt
-*   Firmar binarios
-*   Centralizar ejecución en servidor
-
-Nada de esto es necesario para el MVP actual.
-
-***
-
-Resumen corto (TL;DR)
-
-Este repo convierte muchas llamadas diarias en un único archivo analizable y usa Copilot como analista, no como buscador de documentos.
-
-El valor está en:  
-agregación + lenguaje natural + cero fricción para el usuario final
+- _interno/bootstrap_macos.sh
+- _interno/ejecutar_flujo.py
+- _interno/pipeline.py
+- TRANSCRIBIR AUDIOS - macOS.command

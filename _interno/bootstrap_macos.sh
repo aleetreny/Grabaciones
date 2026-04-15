@@ -19,6 +19,11 @@ touch "$LOG_FILE"
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_NO_ENV_HINTS=1
+export PYTHONUTF8=1
+
+is_silent() {
+  [[ "${TRANSCRIPCION_SILENCIOSA:-0}" == "1" ]]
+}
 
 log() {
   local message="$1"
@@ -33,7 +38,10 @@ run_and_log() {
 
 show_dialog() {
   local message="$1"
-  osascript -e "display dialog \"${message//\"/\\\"}\" with title \"Procesar llamadas\" buttons {\"OK\"} default button \"OK\"" >/dev/null 2>&1 || true
+  if is_silent; then
+    return
+  fi
+  osascript -e "display dialog \"${message//\"/\\\"}\" with title \"Transcribir audios\" buttons {\"OK\"} default button \"OK\"" >/dev/null 2>&1 || true
 }
 
 clear_diagnostic() {
@@ -46,7 +54,7 @@ summarize_failure() {
   lowered="$(printf '%s' "$message" | tr '[:upper:]' '[:lower:]')"
 
   if [[ "$lowered" == *"curl"* || "$lowered" == *"download"* || "$lowered" == *"ssl"* || "$lowered" == *"certificate"* || "$lowered" == *"proxy"* || "$lowered" == *"connection"* || "$lowered" == *"pypi.org"* || "$lowered" == *"python.org"* || "$lowered" == *"githubusercontent"* ]]; then
-    printf '%s\n' "No se ha podido descargar uno de los componentes necesarios. Comprueba internet o si la red corporativa bloquea la descarga."
+    printf '%s\n' "No se ha podido descargar uno de los componentes necesarios. Comprueba internet o si la red bloquea la descarga."
     return
   fi
 
@@ -247,9 +255,15 @@ ensure_runtime() {
 
 launch_flow() {
   CURRENT_STAGE="iniciando el flujo"
-  log "Arrancando flujo de procesamiento."
+  log "Arrancando flujo de transcripcion."
   : > "$FLOW_LOG_FILE"
-  "$MAC_PYTHON" "$ROOT_DIR/_interno/ejecutar_flujo.py" >>"$FLOW_LOG_FILE" 2>&1
+
+  export WHISPER_MODEL="${WHISPER_MODEL:-turbo}"
+  export WHISPER_LANGUAGE="${WHISPER_LANGUAGE:-es}"
+
+  "$MAC_PYTHON" "$ROOT_DIR/_interno/ejecutar_flujo.py" 2>&1 | tee -a "$FLOW_LOG_FILE"
+  local flow_status=${PIPESTATUS[0]}
+  return "$flow_status"
 }
 
 clear_diagnostic

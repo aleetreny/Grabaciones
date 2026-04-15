@@ -1,56 +1,48 @@
-# Procesador de llamadas
+# Transcriptor personal de audios (macOS)
+
+Este proyecto esta preparado para un uso personal en Mac:
+
+- Metes audios en una carpeta.
+- Pulsas un unico boton.
+- Obtienes un `.txt` por cada audio.
+- Cada transcripcion se guarda en cuanto termina cada archivo, para no perder avance si algo falla.
 
 ## Como usarlo
 
-1. Si te han pasado un `.zip`, extrae la carpeta completa antes de pulsar ningun boton.
-2. Copia los videos o audios nuevos en `01_Videos`.
-3. Haz doble clic en el boton de tu sistema:
-   - Windows: `INICIAR PROCESO - Windows.vbs`
-   - Mac: `INICIAR PROCESO - macOS.command`
-4. Si el equipo muestra algun aviso, aceptalo y espera.
-5. Cuando termine, abre el archivo `.txt` que aparece en `03_Texto_para_Copilot`.
-6. Sube ese archivo a Copilot.
+1. Copia los audios o videos nuevos en `01_Audios_entrada`.
+2. Haz doble clic en `TRANSCRIBIR AUDIOS - macOS.command`.
+3. Veras una ventana con progreso en tiempo real.
+	Si por algun motivo no aparece la ventana grafica, veras una barra de progreso en la terminal.
+4. Al terminar, las transcripciones se guardan en `02_Transcripciones/<YYYY-MM-DD>/`.
+5. Los audios ya procesados se mueven a `03_Audios_procesados/<YYYY-MM-DD>/`.
 
-## Lo importante
+## Que hace el flujo
 
-- La primera vez puede tardar bastante mas que las siguientes.
-- No hace falta instalar nada a mano.
-- Mientras se prepara por primera vez, no hace falta volver a pulsar el boton.
-- En Windows aparece una ventana de preparacion nada mas pulsar el boton y luego se abre la ventana principal del proceso.
-- En Windows, la primera vez crea sus componentes internos fuera de la carpeta compartida para evitar problemas de rutas largas.
-- En Mac puede salir algun aviso del sistema la primera vez y solo hay que aceptarlo.
-- Cuando acaba, los videos procesados se mueven a `04_Videos_ya_procesados`.
+- Usa Whisper en local.
+- Modelo por defecto: `turbo` (alto rendimiento y buena calidad).
+- Idioma por defecto: `es`.
+- Guarda un `.txt` individual por archivo de audio/video.
+- El nombre del `.txt` incluye la fecha de creacion detectada + el nombre original: `YYYY-MM-DD - nombre_original.txt`.
+- No genera archivo consolidado y no usa Copilot.
 
-## Carpetas que vas a usar
+## Carpetas
 
-- `01_Videos`: aqui se ponen los videos o audios nuevos.
-- `03_Texto_para_Copilot`: aqui aparece el archivo final que tienes que subir.
+- `01_Audios_entrada`: entrada de audios/videos pendientes.
+- `02_Transcripciones`: salida de `.txt` individuales por fecha.
+- `03_Audios_procesados`: audios/videos ya procesados por fecha.
 
 ## Si algo falla
 
-- Si aparece un error, se genera `DIAGNOSTICO - ultimo error.txt` en la raiz de la carpeta.
-- Ese archivo es el que hay que abrir y compartir si quieres revisar el problema.
-- Si necesitas mas detalle tecnico, tambien puedes mirar `_interno/logs/ultima_ejecucion.txt`.
+- Se crea `DIAGNOSTICO - ultimo error.txt` en la raiz.
+- Log tecnico: `_interno/logs/ultima_ejecucion.txt`.
 
-## Si quieres repetir el proceso
+## Repetir o re-procesar
 
-1. Mete nuevos videos o audios en `01_Videos`.
-2. Vuelve a hacer doble clic en el boton de tu sistema.
+- Para procesar nuevos audios: mete archivos en `01_Audios_entrada` y vuelve a pulsar el boton.
+- Para re-procesar un audio ya usado: mueve ese archivo desde `03_Audios_procesados/<fecha>/` a `01_Audios_entrada`.
 
-## Preguntas frecuentes
+## Variables opcionales
 
-### Quiero borrar transcripciones antiguas
-
-Puedes borrar sin problema las carpetas con fecha dentro de `02_Transcripciones_por_llamada` y los archivos `.txt` de `03_Texto_para_Copilot`.
-
-### Quiero volver a procesar un video ya usado
-
-Mueve ese video desde `04_Videos_ya_procesados` de vuelta a `01_Videos` y vuelve a pulsar el boton.
-
-### Quiero empezar de cero
-
-Vacia el contenido de `02_Transcripciones_por_llamada`, `03_Texto_para_Copilot` y `04_Videos_ya_procesados`. Despues deja en `01_Videos` solo los archivos que quieras procesar.
-
-### La primera vez tarda mucho
-
-Es normal. La primera ejecucion puede tardar bastante mas porque el equipo se prepara solo.
+- `WHISPER_MODEL`: cambia el modelo de Whisper (por defecto `turbo`; para maxima precision puedes usar `large-v3`).
+- `WHISPER_LANGUAGE`: idioma de transcripcion (por defecto `es`).
+- `TRANSCRIPCION_SILENCIOSA=1`: modo sin dialogs para ejecucion por terminal.

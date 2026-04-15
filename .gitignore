@@ -9,18 +9,17 @@ __pycache__/
 *.pyd
 
 # Datos locales de trabajo
-01_Videos/*
-!01_Videos/.gitkeep
-02_Transcripciones_por_llamada/*
-!02_Transcripciones_por_llamada/.gitkeep
-03_Texto_para_Copilot/*
-!03_Texto_para_Copilot/.gitkeep
-04_Videos_ya_procesados/*
-!04_Videos_ya_procesados/.gitkeep
+01_Audios_entrada/*
+!01_Audios_entrada/.gitkeep
+02_Transcripciones/*
+!02_Transcripciones/.gitkeep
+03_Audios_procesados/*
+!03_Audios_procesados/.gitkeep
 
 # Entornos y temporales internos
 _interno/venv/
 _interno/venv-macos/
+.venv/
 _interno/logs/*
 !_interno/logs/.gitkeep
 _interno/__pycache__/
@@ -28,14 +27,25 @@ _interno/pruebas/__pycache__/
 _interno/_build/
 
 # Binarios locales que no deben ir al repo
-_interno/herramientas/windows/ffmpeg.exe
 _interno/herramientas/macos/ffmpeg
 
 # Binario nativo opcional de macOS
 _interno/runtime/macos/iniciar_flujo
 
-# Runtime local opcional de Windows
-_interno/runtime/windows/iniciar_flujo.exe
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python y packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+.pytest_cache/
+.env
+.env.*
 
 # Diagnosticos visibles generados en errores
 DIAGNOSTICO - ultimo error.txt

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ctypes
 import os
 import queue
 import subprocess
@@ -11,15 +10,9 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from pipeline import (
-    PipelineError,
-    ProgressCallback,
-    open_in_file_browser,
-    project_paths,
-    run_pipeline,
-)
+from pipeline import PipelineError, open_in_file_browser, project_paths, run_pipeline
 
-TITLE = "Procesar llamadas"
+TITLE = "Transcribir audios"
 
 try:
     import tkinter as tk
@@ -77,7 +70,10 @@ def escape_applescript(value: str) -> str:
 
 
 def silent_mode() -> bool:
-    return os.environ.get("PROCESAR_LLAMADAS_SILENCIOSO") == "1"
+    return (
+        os.environ.get("TRANSCRIPCION_SILENCIOSA") == "1"
+        or os.environ.get("PROCESAR_LLAMADAS_SILENCIOSO") == "1"
+    )
 
 
 def show_info(message: str) -> None:
@@ -85,9 +81,6 @@ def show_info(message: str) -> None:
         print(message)
         return
 
-    if sys.platform.startswith("win"):
-        ctypes.windll.user32.MessageBoxW(None, message, TITLE, 0x40)
-        return
     if sys.platform == "darwin":
         safe_message = escape_applescript(message)
         safe_title = escape_applescript(TITLE)
@@ -100,6 +93,7 @@ def show_info(message: str) -> None:
             check=False,
         )
         return
+
     print(message)
 
 
@@ -108,9 +102,6 @@ def show_error(message: str) -> None:
         print(message, file=sys.stderr)
         return
 
-    if sys.platform.startswith("win"):
-        ctypes.windll.user32.MessageBoxW(None, message, TITLE, 0x10)
-        return
     if sys.platform == "darwin":
         safe_message = escape_applescript(message)
         safe_title = escape_applescript(TITLE)
@@ -123,6 +114,7 @@ def show_error(message: str) -> None:
             check=False,
         )
         return
+
     print(message, file=sys.stderr)
 
 
@@ -132,18 +124,18 @@ def summarize_unexpected_error(error: BaseException) -> str:
 
     if any(token in lowered for token in ("ssl", "certificate", "urlopen", "download", "http error", "connection")):
         return (
-            "No se ha podido descargar o cargar el modelo de Whisper en este equipo. "
-            "Comprueba la conexion a internet o si la red corporativa bloquea la descarga."
+            "No se ha podido descargar o cargar el modelo de Whisper. "
+            "Comprueba internet o si la red bloquea la descarga."
         )
 
-    if "torch" in lowered or "dll" in lowered:
+    if "torch" in lowered:
         return (
-            "Whisper no se ha podido cargar correctamente en este equipo. "
+            "Whisper no se ha podido cargar correctamente en este Mac. "
             "Puede faltar alguna dependencia del entorno interno."
         )
 
     if "permission" in lowered or "denied" in lowered:
-        return "Windows ha bloqueado algun archivo del proceso. Comprueba permisos y vuelve a intentarlo."
+        return "macOS ha bloqueado algun archivo del proceso. Comprueba permisos y vuelve a intentarlo."
 
     if message:
         return f"Detalle tecnico: {error.__class__.__name__}: {message}"
@@ -162,8 +154,8 @@ def write_diagnostic_report(summary: str, details: str) -> Path:
             "DIAGNOSTICO DEL ULTIMO ERROR",
             "",
             f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            f"Equipo: {os.environ.get('COMPUTERNAME', '')}",
-            f"Usuario: {os.environ.get('USERNAME', '')}",
+            f"Host: {os.environ.get('HOSTNAME', '')}",
+            f"Usuario: {os.environ.get('USER', '')}",
             f"Python: {sys.version}",
             "",
             "RESUMEN",
@@ -183,13 +175,88 @@ def write_diagnostic_report(summary: str, details: str) -> Path:
 
 def open_path(target: Path) -> None:
     target_text = str(target)
-    if sys.platform.startswith("win"):
-        os.startfile(target_text)  # type: ignore[attr-defined]
-        return
     if sys.platform == "darwin":
         subprocess.Popen(["open", target_text])
         return
     subprocess.Popen(["xdg-open", target_text])
+
+
+class TerminalProgress:
+    def __init__(self) -> None:
+        self.total_files = 0
+        self.current_file = 0
+        self.file_name = ""
+        self._last_print_key: tuple[int, int] | None = None
+
+    def _short_name(self, name: str, max_len: int = 36) -> str:
+        clean = name.strip() or "(archivo)"
+        if len(clean) <= max_len:
+            return clean
+        return clean[: max_len - 3] + "..."
+
+    def _bar(self, percent: int, width: int = 24) -> str:
+        safe_percent = max(0, min(100, percent))
+        done = round(width * safe_percent / 100)
+        return "#" * done + "-" * (width - done)
+
+    def _print_progress(self, percent: int) -> None:
+        if self.total_files <= 0:
+            return
+
+        key = (self.current_file, percent)
+        if self._last_print_key == key:
+            return
+        self._last_print_key = key
+
+        file_label = self._short_name(self.file_name)
+        bar = self._bar(percent)
+        print(
+            f"[Progreso {self.current_file}/{self.total_files}] [{bar}] {percent:>3}%  {file_label}",
+            flush=True,
+        )
+
+    def handle(self, event: str, payload: dict[str, object]) -> None:
+        if event == "pipeline_started":
+            self.total_files = int(payload.get("total_files", 0))
+            self.current_file = 0
+            self.file_name = ""
+            self._last_print_key = None
+            if self.total_files > 0:
+                print(f"Inicio de transcripcion: {self.total_files} archivo(s).", flush=True)
+            return
+
+        if event == "model_loading":
+            model_name = str(payload.get("model_name", "turbo"))
+            device = str(payload.get("device", "cpu"))
+            print(f"Cargando modelo Whisper ({model_name}, {device})...", flush=True)
+            return
+
+        if event == "file_started":
+            self.current_file = int(payload.get("current_file", 0))
+            self.file_name = str(payload.get("file_name", ""))
+            self._last_print_key = None
+            self._print_progress(0)
+            return
+
+        if event == "file_progress":
+            self.current_file = int(payload.get("current_file", self.current_file))
+            self.file_name = str(payload.get("file_name", self.file_name))
+            percent = int(payload.get("percent", 0))
+            # Evita ruido excesivo en terminal manteniendo actualizaciones cada 5%.
+            bucketed = percent if percent in (0, 100) else (percent // 5) * 5
+            self._print_progress(bucketed)
+            return
+
+        if event == "file_finished":
+            self.current_file = int(payload.get("current_file", self.current_file))
+            self.file_name = str(payload.get("file_name", self.file_name))
+            self._print_progress(100)
+            return
+
+        if event == "pipeline_finished":
+            processed = int(payload.get("processed_files", 0))
+            print(f"Lote completado. Archivos procesados: {processed}.", flush=True)
+            return
 
 
 @contextmanager
@@ -201,6 +268,7 @@ def single_execution_lock():
         lock_file.write(b" ")
         lock_file.flush()
         lock_file.seek(0)
+
         if os.name == "nt":
             import msvcrt
 
@@ -209,6 +277,7 @@ def single_execution_lock():
             import fcntl
 
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
         lock_file.seek(0)
         lock_file.truncate()
         lock_file.write(str(os.getpid()).encode("ascii", errors="ignore"))
@@ -240,9 +309,18 @@ def run_headless() -> int:
     paths = project_paths(repository_root())
     paths.ensure_directories()
     write_log("Inicio de ejecucion.")
+    terminal_progress = TerminalProgress()
+
+    def headless_log(message: str) -> None:
+        write_log(message)
+        print(message, flush=True)
 
     try:
-        summary = run_pipeline(paths, log=write_log)
+        summary = run_pipeline(
+            paths,
+            log=headless_log,
+            progress=terminal_progress.handle,
+        )
     except PipelineError as error:
         write_log(f"Proceso detenido: {error}")
         report = write_diagnostic_report(str(error), "")
@@ -251,33 +329,28 @@ def run_headless() -> int:
                 open_path(report)
             except Exception:  # noqa: BLE001
                 pass
-        show_error(
-            f"{error}\n\n"
-            f"Se ha guardado un diagnostico en:\n{report}"
-        )
+        show_error(f"{error}\n\nSe ha guardado un diagnostico en:\n{report}")
         return 1
     except Exception:  # noqa: BLE001
         details = traceback.format_exc()
         write_log(details)
-        summary = summarize_unexpected_error(sys.exc_info()[1] or RuntimeError("Error desconocido"))
-        report = write_diagnostic_report(summary, details)
+        summary_message = summarize_unexpected_error(sys.exc_info()[1] or RuntimeError("Error desconocido"))
+        report = write_diagnostic_report(summary_message, details)
         if not silent_mode():
             try:
                 open_path(report)
             except Exception:  # noqa: BLE001
                 pass
-        show_error(
-            f"{summary}\n\n"
-            f"Se ha guardado un diagnostico en:\n{report}"
-        )
+        show_error(f"{summary_message}\n\nSe ha guardado un diagnostico en:\n{report}")
         return 1
 
-    open_in_file_browser(summary.export_file.parent)
-    write_log(f"Archivo final generado: {summary.export_file}")
+    if not silent_mode():
+        open_in_file_browser(summary.transcript_folder)
+    write_log(f"Transcripciones guardadas en: {summary.transcript_folder}")
     show_info(
         "Proceso completado.\n\n"
-        f"Videos procesados: {summary.processed_files}\n"
-        f"Archivo final: {summary.export_file.name}"
+        f"Audios procesados: {summary.processed_files}\n"
+        f"Carpeta de transcripciones: {summary.transcript_folder.name}"
     )
     return 0
 
@@ -286,21 +359,19 @@ class ProcessMonitorApp:
     def __init__(self) -> None:
         self.root = Tk()
         self.root.title(TITLE)
-        self.root.geometry("560x340")
-        self.root.minsize(520, 300)
+        self.root.geometry("580x360")
+        self.root.minsize(540, 320)
 
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.worker: threading.Thread | None = None
         self.running = False
         self.paths = project_paths(repository_root())
         self.paths.ensure_directories()
-        self.export_file: Path | None = None
+        self.transcript_folder: Path | None = None
         self.diagnostic_file: Path | None = None
 
         self.status_var = tk.StringVar(value="Preparando proceso...")
-        self.detail_var = tk.StringVar(
-            value="Puedes minimizar esta ventana y seguir trabajando."
-        )
+        self.detail_var = tk.StringVar(value="Puedes minimizar esta ventana y seguir trabajando.")
         self.counter_var = tk.StringVar(value="Pendiente de iniciar")
         self.percent_var = tk.StringVar(value="0%")
 
@@ -324,8 +395,8 @@ class ProcessMonitorApp:
 
         subtitle = ttk.Label(
             outer,
-            text="La ventana puede quedarse minimizada mientras el proceso sigue en segundo plano.",
-            wraplength=500,
+            text="El progreso se actualiza en tiempo real y cada transcripcion se guarda al terminar cada audio.",
+            wraplength=520,
             justify="left",
         )
         subtitle.grid(row=1, column=0, sticky="w", pady=(4, 14))
@@ -334,7 +405,7 @@ class ProcessMonitorApp:
             outer,
             textvariable=self.status_var,
             font=("", 11, "bold"),
-            wraplength=500,
+            wraplength=520,
             justify="left",
         )
         status.grid(row=2, column=0, sticky="w")
@@ -342,7 +413,7 @@ class ProcessMonitorApp:
         detail = ttk.Label(
             outer,
             textvariable=self.detail_var,
-            wraplength=500,
+            wraplength=520,
             justify="left",
         )
         detail.grid(row=3, column=0, sticky="w", pady=(6, 10))
@@ -410,8 +481,8 @@ class ProcessMonitorApp:
         try:
             self.root.update_idletasks()
 
-            width = max(self.root.winfo_width(), 560)
-            height = max(self.root.winfo_height(), 340)
+            width = max(self.root.winfo_width(), 580)
+            height = max(self.root.winfo_height(), 360)
             screen_width = self.root.winfo_screenwidth()
             screen_height = self.root.winfo_screenheight()
             x = max((screen_width - width) // 2, 0)
@@ -423,11 +494,6 @@ class ProcessMonitorApp:
             self.root.focus_force()
             self.root.attributes("-topmost", True)
             self.root.after(1200, lambda: self.root.attributes("-topmost", False))
-
-            if sys.platform.startswith("win"):
-                hwnd = self.root.winfo_id()
-                ctypes.windll.user32.ShowWindow(hwnd, 5)
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
         except Exception:  # noqa: BLE001
             return
 
@@ -494,8 +560,10 @@ class ProcessMonitorApp:
             return
 
         if event == "model_loading":
+            model_name = str(payload.get("model_name", "large-v3"))
+            device = str(payload.get("device", "cpu"))
             self.status_var.set("Cargando Whisper")
-            self.detail_var.set("Primer arranque o primer uso del dia. Puede tardar un poco.")
+            self.detail_var.set(f"Modelo {model_name} en {device}. El primer arranque puede tardar.")
             self.percent_var.set("0%")
             return
 
@@ -532,7 +600,7 @@ class ProcessMonitorApp:
             total_files = int(payload["total_files"])
             transcript_name = str(payload["transcript_name"])
             self.status_var.set("Archivo completado")
-            self.detail_var.set(transcript_name)
+            self.detail_var.set(f"Guardado: {transcript_name}")
             self.counter_var.set(f"Archivo {current_file} de {total_files}")
             self.file_progress.configure(maximum=100, value=100)
             self.percent_var.set("100%")
@@ -540,10 +608,12 @@ class ProcessMonitorApp:
 
         if event == "pipeline_finished":
             processed_files = int(payload["processed_files"])
-            self.export_file = payload["export_file"]  # type: ignore[assignment]
+            transcript_folder = payload.get("transcript_folder")
+            if isinstance(transcript_folder, Path):
+                self.transcript_folder = transcript_folder
             self.status_var.set("Proceso completado")
-            self.detail_var.set("Ya puedes abrir el resultado final.")
-            self.counter_var.set(f"Videos procesados: {processed_files}")
+            self.detail_var.set("Ya puedes abrir las transcripciones.")
+            self.counter_var.set(f"Audios procesados: {processed_files}")
             self.file_progress.configure(maximum=100, value=100)
             self.percent_var.set("100%")
 
@@ -553,7 +623,7 @@ class ProcessMonitorApp:
         self.diagnostic_file = write_diagnostic_report(str(error), "")
         self.status_var.set("Proceso detenido")
         self.detail_var.set(str(error))
-        self.counter_var.set("No se ha procesado ningun archivo")
+        self.counter_var.set("No se ha completado el lote")
         self.append_log(f"Proceso detenido: {error}")
         self.open_button.configure(state="normal", text="Abrir diagnostico")
         try:
@@ -591,27 +661,27 @@ class ProcessMonitorApp:
     def handle_done(self, summary: object) -> None:
         self.running = False
         self.present_window()
-        self.open_button.configure(state="normal", text="Abrir resultado")
+        self.open_button.configure(state="normal", text="Abrir transcripciones")
 
-        export_file = getattr(summary, "export_file", None)
-        if isinstance(export_file, Path):
-            self.export_file = export_file
-            open_in_file_browser(export_file.parent)
+        transcript_folder = getattr(summary, "transcript_folder", None)
+        if isinstance(transcript_folder, Path):
+            self.transcript_folder = transcript_folder
+            open_in_file_browser(transcript_folder)
 
-        processed_files = getattr(summary, "processed_files", 0)
+        processed_files = int(getattr(summary, "processed_files", 0))
         messagebox.showinfo(
             TITLE,
             "Proceso completado.\n\n"
-            f"Videos procesados: {processed_files}\n"
-            f"Archivo final: {self.export_file.name if self.export_file else ''}",
+            f"Audios procesados: {processed_files}\n"
+            f"Carpeta: {self.transcript_folder.name if self.transcript_folder else ''}",
         )
 
     def open_result(self) -> None:
         if self.diagnostic_file is not None and self.diagnostic_file.exists():
             open_path(self.diagnostic_file)
             return
-        if self.export_file is not None:
-            open_in_file_browser(self.export_file.parent)
+        if self.transcript_folder is not None:
+            open_in_file_browser(self.transcript_folder)
 
     def on_close(self) -> None:
         if self.running:
@@ -627,12 +697,13 @@ class ProcessMonitorApp:
 def main() -> int:
     with single_execution_lock() as acquired:
         if not acquired:
-            show_info("Ya hay un proceso en marcha en esta carpeta. Espera a que termine o abre la ventana que ya esta en segundo plano.")
+            show_info(
+                "Ya hay un proceso en marcha en esta carpeta. "
+                "Espera a que termine o abre la ventana que ya esta en segundo plano."
+            )
             return 0
 
-        if silent_mode():
-            return run_headless()
-        if not TK_AVAILABLE:
+        if silent_mode() or not TK_AVAILABLE:
             return run_headless()
         app = ProcessMonitorApp()
         return app.run()
